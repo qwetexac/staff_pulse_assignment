@@ -1,6 +1,6 @@
 import { BUDGET_CURRENCY_LABEL } from '@/shared/constants'
 
-const budgetNumberFormat = new Intl.NumberFormat('en-US', {
+const budgetNumberFormat = new Intl.NumberFormat('ru-RU', {
   maximumFractionDigits: 0,
 })
 
@@ -13,9 +13,9 @@ const headcountNumberFormat = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 })
 
-/** Thousands grouping plus currency label, e.g. `$12,345,678`. */
+/** Thousands grouping plus currency label, e.g. `4 569 028 руб.`. */
 export function formatBudget(amount: number): string {
-  return `${BUDGET_CURRENCY_LABEL}${budgetNumberFormat.format(amount)}`
+  return `${budgetNumberFormat.format(amount)} ${BUDGET_CURRENCY_LABEL}`
 }
 
 export function formatHeadcount(value: number): string {

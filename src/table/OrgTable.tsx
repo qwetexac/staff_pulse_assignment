@@ -5,6 +5,13 @@ import {
   useState,
   type KeyboardEvent,
 } from 'react'
+import {
+  AiSearchInput,
+  applyOrgTableSearch,
+  emptySearchMessage,
+  parseNaturalLanguageQuery,
+  searchStatusMessage,
+} from '@/ai-search'
 import { NAME_FILTER_DEBOUNCE_MS, SORT_CLICK_DELAY_MS } from '@/shared/constants'
 import { useDebouncedValue } from '@/shared/useDebouncedValue'
 import { getPerformanceLevel } from '@/tree/performance'
@@ -21,7 +28,7 @@ import {
   type SortColumn,
   type SortState,
 } from '@/table/tableModel'
-import { filterRowsByName, sortRows } from '@/table/tableQuery'
+import { sortRows } from '@/table/tableQuery'
 import { scrollRowIntoTableView } from '@/table/scrollRowIntoView'
 import {
   clampTableFocus,
@@ -35,8 +42,6 @@ import {
   Caption,
   Cell,
   EmptyFilterMessage,
-  FilterInput,
-  FilterLabel,
   HeaderCell,
   NameCell,
   PerformanceCell,
@@ -78,20 +83,27 @@ function focusCellSelector(rowIndex: number, columnIndex: number): string {
 }
 
 export function OrgTable({ rows, flashes, selectedId, onSelect }: OrgTableProps) {
-  const [nameQuery, setNameQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [sort, setSort] = useState<SortState | null>(null)
   const [rawFocus, setRawFocus] = useState<TableFocus | null>(null)
-  const debouncedQuery = useDebouncedValue(nameQuery, NAME_FILTER_DEBOUNCE_MS)
+  const debouncedQuery = useDebouncedValue(searchQuery, NAME_FILTER_DEBOUNCE_MS)
   const bodyRef = useRef<HTMLTableSectionElement>(null)
   const headRef = useRef<HTMLTableSectionElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const shouldMoveDomFocusRef = useRef(false)
   const sortClickTimerRef = useRef<number | null>(null)
 
+  const parsedSearch = useMemo(
+    () => parseNaturalLanguageQuery(debouncedQuery),
+    [debouncedQuery],
+  )
+
   const visibleRows = useMemo(() => {
-    const filtered = filterRowsByName(rows, debouncedQuery)
+    const filtered = applyOrgTableSearch(rows, parsedSearch)
     return sortRows(filtered, sort)
-  }, [rows, debouncedQuery, sort])
+  }, [rows, parsedSearch, sort])
+
+  const searchStatus = searchStatusMessage(parsedSearch)
 
   const focus =
     rawFocus === null
@@ -202,18 +214,12 @@ export function OrgTable({ rows, flashes, selectedId, onSelect }: OrgTableProps)
   return (
     <TableRoot>
       <TableToolbar>
-        <FilterLabel>
-          Filter by name
-          <FilterInput
-            type="search"
-            value={nameQuery}
-            onChange={(event) => {
-              setNameQuery(event.target.value)
-            }}
-            placeholder="Start typing a unit name…"
-            aria-label="Filter organization units by name"
-          />
-        </FilterLabel>
+        <AiSearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          status={searchStatus}
+          parsedKind={parsedSearch.kind}
+        />
       </TableToolbar>
 
       <TableScroll ref={scrollRef}>
@@ -350,7 +356,7 @@ export function OrgTable({ rows, flashes, selectedId, onSelect }: OrgTableProps)
 
       {visibleRows.length === 0 ? (
         <EmptyFilterMessage role="status">
-          No units match that name.
+          {emptySearchMessage(parsedSearch)}
         </EmptyFilterMessage>
       ) : null}
     </TableRoot>

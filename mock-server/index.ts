@@ -7,12 +7,14 @@ import {
   SSE_HEARTBEAT_MS,
 } from './liveUpdates.ts'
 
-loadEnv()
+loadEnv({ quiet: true })
 
 const DEFAULT_PORT = 4000
+const DEFAULT_HOST = '0.0.0.0'
 const MOCK_API_DELAY_MS = 400
 
 const PORT = Number(process.env.PORT ?? DEFAULT_PORT)
+const HOST = process.env.HOST ?? DEFAULT_HOST
 
 /** Set MOCK_FORCE=empty|error to exercise client empty/error states. */
 const FORCE_MODE = process.env.MOCK_FORCE ?? ''
@@ -156,12 +158,12 @@ setInterval(() => {
   }
 }, SSE_HEARTBEAT_MS)
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log(
-    `[mock-server] listening on http://localhost:${PORT} (${orgTree.length} org nodes)`,
+    `[mock-server] listening on http://${HOST}:${PORT} (${orgTree.length} org nodes)`,
   )
   console.log(
-    `[mock-server] SSE stream at http://localhost:${PORT}/api/org-tree/stream`,
+    `[mock-server] SSE stream at http://${HOST}:${PORT}/api/org-tree/stream`,
   )
   if (FORCE_MODE) {
     console.log(`[mock-server] MOCK_FORCE=${FORCE_MODE}`)

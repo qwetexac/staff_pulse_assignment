@@ -17,9 +17,8 @@ There is no `CLAUDE.md`. Do not create one.
 
 ## Current stage
 
-**03 Polish** is implemented (`step/1`, `step/2`, and realtime/keyboard/animation
-on top of them). Do not create `src/ai-search` unless the user names that
-stage. Do not rebuild Stage 01/02 from scratch.
+**04 Bonus** is implemented (`step/1`–`step/3` plus Docker/nginx/gzip and
+`src/ai-search`). Do not rebuild earlier stages from scratch.
 
 ## What this project is
 
@@ -58,7 +57,7 @@ src/
   table/          # analytical table (stage 02)
   aggregation/    # pure rollups (stage 02)
   realtime/       # SSE client, backoff, connection status (stage 03)
-  ai-search/      # planned — stage 04
+  ai-search/      # NL → structured filter or name fallback (stage 04)
   shared/         # UI primitives, styled-components theme, named constants
 mock-server/      # standalone Node server, kept separate from src/
 docs/
@@ -77,6 +76,8 @@ Absolute imports: `@/*` → `src/*` (`tsconfig.app.json` + Vite
 npm install
 cp env.example .env   # once
 npm run dev:all       # Vite :5173 + mock API :4000
+# or
+docker compose up --build   # nginx :8080 (CLIENT_PORT) + mock API
 ```
 
 - Client base URL: `VITE_API_URL` (default `http://localhost:4000`).
@@ -88,9 +89,9 @@ npm run dev:all       # Vite :5173 + mock API :4000
   performance thresholds high ≥ 70 / medium ≥ 40, name-filter debounce 250ms,
   split-view min width 1280px, cell flash 1.5s, tree expand 200ms, SSE
   backoff 1s…30s).
-- Aggregation and ancestor-recompute tests: `npm run test` (Vitest). Realtime
-  patch/backoff helpers are covered there too. Do not add an AI-search
-  harness until Stage 04 needs it.
+- Aggregation, ancestor-recompute, realtime, and AI-search parser tests:
+  `npm run test` (Vitest). `npm run analyze` writes `reports/bundle-stats.html`;
+  `npm run gzip-size` reports dist gzip vs the 200KB budget.
 
 ## Core architectural principle
 

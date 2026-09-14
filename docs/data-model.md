@@ -1,7 +1,8 @@
 # Data model
 
-Status: node shape, tree construction, aggregation, and the live-update
-patch contract are **implemented** (Stage 03).
+Status: node shape, tree construction, aggregation, the live-update
+patch contract, and the AI-search filter shape are **implemented**
+(Stage 04).
 
 ## `OrgNode` (API and cache)
 
@@ -151,3 +152,23 @@ Payload (zod `OrgNodePatchSchema` in `src/realtime/types.ts`):
 
 Stale or no-op metric payloads do not notify the UI. After the stream
 reconnects, one full GET resyncs any nodes missed while disconnected.
+
+## AI search filter (Stage 04 — implemented)
+
+Code: `src/ai-search`. Tests: `src/ai-search/*.test.ts`. ADR 008.
+
+The search box is parsed into a list of **declarative predicates** over
+**aggregated table columns** (not a ranked snapshot of ids):
+
+```ts
+{ field: 'headcount' | 'budget' | 'performance'; operator: 'gt' | 'lt'; value: number }
+```
+
+`field` maps to `totalHeadcount` / `totalBudget` / `averagePerformance` on
+`OrgTableRow`. Several AND-clauses must all match. The table recomputes
+membership whenever `rows` or the parsed query change, so a Stage 03 patch
+can add or drop a row without re-running the search.
+
+Unrecognized input (including `top N` / OR) is Stage 02 name substring
+search; the UI shows that fallback explicitly.
+

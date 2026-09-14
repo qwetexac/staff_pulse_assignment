@@ -1,0 +1,23 @@
+services:
+  mock-server:
+    build:
+      context: .
+      dockerfile: mock-server/Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4000
+      MOCK_FORCE: ${MOCK_FORCE:-}
+    expose:
+      - "4000"
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${DOCKER_VITE_API_URL:-}
+        VITE_REALTIME_URL: ${DOCKER_VITE_REALTIME_URL:-/api/org-tree/stream}
+    ports:
+      - "${CLIENT_PORT:-8080}:80"
+    depends_on:
+      - mock-server

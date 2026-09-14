@@ -1,6 +1,6 @@
 # Architecture
 
-Status: describes **Stage 03** as implemented. Stage 04 remains a placeholder.
+Status: describes **Stage 04** as implemented.
 
 ## Layers
 
@@ -8,6 +8,8 @@ Status: describes **Stage 03** as implemented. Stage 04 remains a placeholder.
 mock-server/          in-memory Node HTTP API (no database)
         │  GET /api/org-tree           → OrgNode[]
         │  GET /api/org-tree/stream    → SSE OrgNodePatch events
+        ▼
+nginx (Docker)        gzip static client; proxies /api to mock-server
         ▼
 src/api/              fetch + zod validation (full tree)
 src/realtime/         EventSource client, backoff, in-place cache patch
@@ -21,15 +23,15 @@ src/OrgDashboard.tsx  shared selectedId; incremental rollups + table rows
         ├─ src/tree/          derived forest view (height collapse)
         ├─ src/table/         derived analytical table (sort / filter / keys)
         ├─ src/aggregation/   pure rollups + ancestor-only recompute
+        ├─ src/ai-search/     NL → NumericPredicate[] or name fallback
         └─ src/shared/        theme, constants, debounce hook, UI primitives
 ```
 
-Planned directory (do **not** create until that stage): `src/ai-search` (04).
+The mock server is a standalone Node process (`tsx mock-server/index.ts` in
+dev; `node --experimental-strip-types` in the Docker image), kept out of
+`src/` so the client never imports server code.
 
-The mock server is a standalone Node process (`tsx mock-server/index.ts`),
-kept out of `src/` so the client never imports server code.
-
-## Data flow (Stage 03)
+## Data flow (Stage 04)
 
 1. `App` calls `useOrgTree` (initial `GET /api/org-tree`) and
    `useOrgTreeStream` (`EventSource` on `VITE_REALTIME_URL`).
@@ -50,6 +52,10 @@ kept out of `src/` so the client never imports server code.
 6. Table keyboard: arrow keys / Home / End move focus; Enter calls the same
    `onSelect` as a row click. Tree expand/collapse uses a CSS height
    transition skipped under `prefers-reduced-motion: reduce`.
+7. `OrgTable` parses the search box with `parseNaturalLanguageQuery` (ADR 008)
+   and `useMemo`s `applyOrgTableSearch(rows, parsed)` so live row patches
+   re-evaluate the same predicates. Unrecognized input falls back to name
+   substring search with a visible status note.
 
 ```
 GET /api/org-tree
@@ -59,6 +65,8 @@ GET /api/org-tree
         → App + OrgDashboard
                 → aggregateOrgTree | recomputeAncestorRollups
                 → OrgTreeView + OrgTable
+                        → parseNaturalLanguageQuery
+                        → applyOrgTableSearch(rows, parsed)
                 → selectedId
 
 GET /api/org-tree/stream  (SSE)
@@ -66,6 +74,7 @@ GET /api/org-tree/stream  (SSE)
         → applyOrgNodePatch (in-place on cached array)
         → lastPatch → ancestor rollups + cell flashes
         → ConnectionStatus (header)
+        → new table `rows` → search predicates re-run
 ```
 
 ## Layout (Stage 02, unchanged)
@@ -78,19 +87,25 @@ Narrower: Tree / Table toggle. ADR 004.
 The only stored dataset is the validated flat `OrgNode[]` in the query cache.
 Live updates **mutate that array in place**. The tree and the table both read
 it. Aggregates stay a derived `Map`, never written back onto `OrgNode`.
+Search results are derived from the current table rows + the active parse;
+they are not a stored list of ids.
 
 ## Client / server split
 
 | | Client (`src/`) | Mock server (`mock-server/`) |
 |---|---|---|
-| Runtime | Vite + React, port 5173 | Node `http`, port `PORT` (default 4000) |
+| Runtime | Vite + React (dev :5173); nginx :80 in Docker | Node `http`, port `PORT` (default 4000) |
 | Data | Cache of last validated tree, patched live | Seeded in-memory array; random metric jitter ~2.5s |
-| Config | `VITE_API_URL`, `VITE_REALTIME_URL` | `PORT`, `MOCK_FORCE` |
+| Config | `VITE_API_URL`, `VITE_REALTIME_URL` | `PORT`, `HOST`, `MOCK_FORCE` |
 
-CORS is open (`Access-Control-Allow-Origin: *`) because the dev client and
-API are on different origins. Stage 04 may replace that with same-origin
-nginx proxying. SSE responses also send `X-Accel-Buffering: no`.
+Local dev still uses CORS (`Access-Control-Allow-Origin: *`) because Vite
+and the mock API are different origins. Docker serves the client and `/api`
+from one nginx origin (gzip for static files; SSE location unbuffered).
 
-## What is not here yet
+## Production (Docker)
 
-- **Stage 04** — Docker / nginx / gzip budget; AI search module.
+`docker-compose up --build` starts `mock-server` and `client` (nginx). The
+production Vite build is baked with empty `VITE_API_URL` and
+`VITE_REALTIME_URL=/api/org-tree/stream` so the browser stays same-origin.
+Nginx gzip-compresses JS/CSS and proxies `/api` (including the SSE stream)
+to the mock-server container.

@@ -34,4 +34,5 @@ Accepted: `001-custom-cache-layer-vs-library.md`,
 `004-tree-table-layout.md`,
 `005-aggregation-memoization.md`,
 `006-sse-vs-websocket-for-live-updates.md`,
-`007-ancestor-only-aggregate-recomputation.md`.
+`007-ancestor-only-aggregate-recomputation.md`,
+`008-rule-based-nl-search.md`.

@@ -14,7 +14,7 @@ export const REALTIME_URL =
   import.meta.env.VITE_REALTIME_URL ??
   'http://localhost:4000/api/org-tree/stream'
 
-/** Name filter waits this long after the last keystroke before applying. */
+/** Name / AI-search filter waits this long after the last keystroke before applying. */
 export const NAME_FILTER_DEBOUNCE_MS = 250
 
 /**
@@ -29,8 +29,8 @@ export const SPLIT_VIEW_MIN_WIDTH_PX = 1280
 /** Max height of a split-view pane (and of a single-pane scroll area). */
 export const PANE_BODY_MAX_HEIGHT = 'min(70vh, 720px)'
 
-/** Prefix shown with thousand-grouped budget figures (e.g. $12,345,678). */
-export const BUDGET_CURRENCY_LABEL = '$'
+/** Suffix shown with thousand-grouped budget figures (e.g. 4 569 028 руб.). */
+export const BUDGET_CURRENCY_LABEL = 'руб.'
 
 /** Table cells whose values changed from a live patch fade over this duration. */
 export const CELL_FLASH_DURATION_MS = 1_500

@@ -167,3 +167,46 @@
    disconnected after error while backing off, connected on `EventSource`
    open.
 
+## Stage 04 — Bonus
+
+### Generated as-is (lightly edited)
+
+- Multi-stage client `Dockerfile` (Vite build → nginx) and mock-server
+  `Dockerfile` (`node --experimental-strip-types`); `docker-compose.yml`
+  plus `nginx/nginx.conf` (gzip static files, `/api` proxy, SSE unbuffered)
+- `src/ai-search`: rule-based parser → `NumericPredicate[]`, name-search
+  fallback with a visible status note, `useMemo` over current table rows
+- Vitest for parse / apply / table predicates; `rollup-plugin-visualizer`
+  (`npm run analyze`) and `scripts/report-gzip.mjs`
+- ADR 008; README quick start + screenshots; architecture/data-model updates
+
+### Rewritten by hand (and why)
+
+- **Did not call an LLM.** A hosted model would need a key and network;
+  Docker would not work from a clean clone. The parser is a small grammar
+  (ADR 008).
+- **Did not cache matching ids.** `OrgTable` depends on `rows` *and* the
+  parsed filter so a Stage 03 patch can drop a row without re-typing.
+- **Docker build args are not the local-dev `VITE_API_URL`.** Baking
+  `http://localhost:4000` into the nginx image would bypass the proxy.
+  `DOCKER_VITE_*` stay same-origin (`/` + `/api/org-tree/stream`).
+- **OrgTable’s name box is the AI search input** (required). Stage 02
+  substring filter remains the fallback path. Mock-server now binds
+  `HOST` (default `0.0.0.0`) so the container is reachable from nginx.
+
+### Flag for review
+
+- Production JS is **113.0 KB gzip** (budget 200 KB); no extra code-splitting.
+- SSE through nginx needs `proxy_buffering off` on `/api/org-tree/stream`.
+- Grammar is AND + `gt`/`lt` only; `top N` / OR fall back to names.
+
+### Autonomous decisions
+
+1. **Rule-based NL parser** (ADR 008), not an API call.
+2. **Predicates live on table columns** (`totalHeadcount` / `totalBudget` /
+   `averagePerformance`), extending Stage 02’s filter model.
+3. **Internal mock-server port stays 4000** in Compose; `CLIENT_PORT` is the
+   host nginx port (default 8080).
+4. **Visualizer only when `ANALYZE=true`** so the nginx image does not ship
+   `stats.html`.
+

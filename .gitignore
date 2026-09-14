@@ -27,3 +27,6 @@ coverage/
 
 # Vite
 .vite/
+
+# Bundle analyzer output
+reports/

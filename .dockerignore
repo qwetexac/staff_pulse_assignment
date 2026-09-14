@@ -1,0 +1,16 @@
+node_modules
+dist
+build
+coverage
+reports
+.git
+.cursor
+.vscode
+.idea
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.vite
+agent-transcripts

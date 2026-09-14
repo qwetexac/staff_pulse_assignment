@@ -59,31 +59,6 @@ export const TableToolbar = styled.div`
   margin-bottom: ${({ theme }) => theme.space.md};
 `
 
-export const FilterLabel = styled.label`
-  display: flex;
-  flex-direction: column;
-  gap: ${({ theme }) => theme.space.xs};
-  flex: 1 1 220px;
-  min-width: 0;
-  font-size: 0.85rem;
-  color: ${({ theme }) => theme.colors.textMuted};
-`
-
-export const FilterInput = styled.input`
-  width: 100%;
-  padding: ${({ theme }) => theme.space.sm} ${({ theme }) => theme.space.md};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.radii.sm};
-  background: ${({ theme }) => theme.colors.surface};
-  color: ${({ theme }) => theme.colors.text};
-  font: inherit;
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.focus};
-    outline-offset: 2px;
-  }
-`
-
 export const TableScroll = styled.div`
   flex: 1;
   min-height: 0;
@@ -184,6 +159,7 @@ export const Cell = styled.td<{
   padding: ${({ theme }) => theme.space.sm} ${({ theme }) => theme.space.md};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   text-align: ${({ $numeric }) => ($numeric ? 'right' : 'left')};
+  white-space: ${({ $numeric }) => ($numeric ? 'nowrap' : 'normal')};
   color: ${({ theme }) => theme.colors.text};
   ${flashChrome}
   ${keyboardFocusChrome}
