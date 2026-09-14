@@ -17,9 +17,9 @@ There is no `CLAUDE.md`. Do not create one.
 
 ## Current stage
 
-**01 Foundation.** Implement only this stage unless the user names a later
-one. Do not create `src/table`, `src/aggregation`, `src/realtime`, or
-`src/ai-search` ahead of time.
+**02 Core** is implemented (`step/1` and table/aggregation on top of it).
+Do not create `src/realtime` or `src/ai-search` unless the user names that
+stage. Do not rebuild Stage 01/02 from scratch.
 
 ## What this project is
 
@@ -55,8 +55,8 @@ src/
   api/            # types, zod schemas, fetch functions
   cache/          # custom query-cache hook (stale-while-revalidate)
   tree/           # tree view components and logic
-  table/          # planned — stage 02
-  aggregation/    # planned — stage 02; pure rollups only
+  table/          # analytical table (stage 02)
+  aggregation/    # pure rollups (stage 02)
   realtime/       # planned — stage 03
   ai-search/      # planned — stage 04
   shared/         # UI primitives, styled-components theme, named constants
@@ -85,9 +85,10 @@ npm run dev:all       # Vite :5173 + mock API :4000
 - Org tree is generated with seed `424242` (≥40 nodes, three levels).
 - Artificial API delay: 400ms (`MOCK_API_DELAY_MS`).
 - Named constants live in `src/shared/constants.ts` (stale time 5s,
-  performance thresholds high ≥ 70 / medium ≥ 40).
-- There is **no test runner yet**. Aggregation tests land in stage 02;
-  do not add `npm run test` until then.
+  performance thresholds high ≥ 70 / medium ≥ 40, name-filter debounce 250ms,
+  split-view min width 1280px).
+- Aggregation tests: `npm run test` (Vitest). Do not add realtime tests or
+  a broader harness until Stage 03 needs them.
 
 ## Core architectural principle
 

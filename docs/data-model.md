@@ -1,8 +1,7 @@
 # Data model
 
-Status: node shape and tree construction are **implemented** (Stage 01).
-Aggregation is specified here for Stage 02 (not in code yet). The live-update
-patch contract is a stub until Stage 03.
+Status: node shape, tree construction, and aggregation are **implemented**
+(Stage 02). The live-update patch contract is a stub until Stage 03.
 
 ## `OrgNode` (API and cache)
 
@@ -58,7 +57,10 @@ Default expansion (ADR 003): expand every root **and** every direct child
 so the second level is expanded (teams visible). Re-seed only when the
 root-id signature changes, not on every SWR array identity change.
 
-## Aggregation (Stage 02 — specify now, implement then)
+## Aggregation (Stage 02 — implemented)
+
+Code: `src/aggregation/aggregateOrgTree.ts`. Tests:
+`src/aggregation/aggregateOrgTree.test.ts` (`npm run test`).
 
 Totals for a node include **the node itself and all descendants**. Average
 performance is **weighted by headcount**.
@@ -75,9 +77,11 @@ If `totalHeadcount(n) === 0`, `averagePerformance(n)` is `0` (avoid divide
 by zero; a zero-headcount node contributes nothing to a parent's weighted
 average).
 
-Aggregation is computed once after data loads and memoized. Do not store
-rollups on `OrgNode`. Stage 03 must recompute only the patched node and its
-ancestors, not the whole forest.
+Aggregation is computed once after data loads and memoized in `OrgDashboard`
+(`useMemo` on `nodes`; ADR 005). Do not store rollups on `OrgNode`. The
+returned `NodeRollup` includes `weightedPerformanceSum` so Stage 03 can
+recompute only the patched node and its ancestors via
+`rollupFromSelfAndChildren`, not the whole forest.
 
 ### Worked examples (unit-test cases)
 

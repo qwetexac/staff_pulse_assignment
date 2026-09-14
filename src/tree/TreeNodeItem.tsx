@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { TreeNode } from '@/tree/buildTree'
 import { getPerformanceLevel } from '@/tree/performance'
 import {
@@ -27,11 +28,20 @@ export function TreeNodeItem({
 }: TreeNodeItemProps) {
   const hasChildren = node.children.length > 0
   const isExpanded = expandedIds.has(node.id)
+  const isSelected = selectedId === node.id
   const performanceLevel = getPerformanceLevel(node.performance)
+  const rowRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isSelected) {
+      return
+    }
+    rowRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [isSelected])
 
   return (
     <TreeItem>
-      <NodeRow $selected={selectedId === node.id}>
+      <NodeRow ref={rowRef} $selected={isSelected} aria-selected={isSelected}>
         <ToggleButton
           type="button"
           aria-expanded={hasChildren ? isExpanded : undefined}

@@ -1,7 +1,7 @@
 import styled from 'styled-components'
 
 export const AppShell = styled.div`
-  max-width: 960px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: ${({ theme }) => theme.space.xl} ${({ theme }) => theme.space.lg};
 `

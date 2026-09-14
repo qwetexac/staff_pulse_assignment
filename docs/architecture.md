@@ -1,6 +1,6 @@
 # Architecture
 
-Status: describes **Stage 01** as implemented. Later-stage sections are
+Status: describes **Stage 02** as implemented. Later-stage sections are
 placeholders — fill them in when that stage lands; do not invent transports
 or modules that are not in the repo yet.
 
@@ -16,17 +16,20 @@ src/cache/            module-level stale-while-revalidate store
         ▼
 src/App.tsx           loading / error / empty branches
         ▼
-src/tree/             derived forest view over the same flat array
-src/shared/           theme, constants, UI primitives
+src/OrgDashboard.tsx  shared selectedId; memoized rollups + table rows
+        ├─ src/tree/          derived forest view
+        ├─ src/table/         derived analytical table (sort / name filter)
+        ├─ src/aggregation/   pure rollups (Map<id, NodeRollup>)
+        └─ src/shared/        theme, constants, debounce hook, UI primitives
 ```
 
-Planned directories (do **not** create until their stage): `src/table` and
-`src/aggregation` (02), `src/realtime` (03), `src/ai-search` (04).
+Planned directories (do **not** create until their stage): `src/realtime`
+(03), `src/ai-search` (04).
 
 The mock server is a standalone Node process (`tsx mock-server/index.ts`),
 kept out of `src/` so the client never imports server code.
 
-## Data flow (Stage 01)
+## Data flow (Stage 02)
 
 1. `App` calls `useOrgTree`, which is a thin wrapper around `useQueryCache`
    with query key `org-tree` (`ORG_TREE_QUERY_KEY`) and `fetchOrgTree`.
@@ -42,28 +45,43 @@ kept out of `src/` so the client never imports server code.
    only when the last subscriber releases (unmount / `enabled: false`).
 5. `App` maps cache state to UI: `isLoading` → loading panel; `error` →
    error panel; `data.length === 0` → empty panel; otherwise
-   `<OrgTreeView nodes={data} />`.
-6. `OrgTreeView` memoizes `buildTree(nodes)` and keeps expansion / selection
-   as local React state keyed by node id. The nested `TreeNode` objects are
-   a view — they are not written back into the cache (ADR 002, ADR 003).
+   `<OrgDashboard nodes={data} />`.
+6. `OrgDashboard` memoizes `aggregateOrgTree(nodes)` and `buildTableRows`
+   (depends on `nodes` only). It owns one `selectedId` passed into both views.
+7. `OrgTreeView` memoizes `buildTree(nodes)` and keeps **expansion** as local
+   React state keyed by node id. Selection is controlled by the dashboard.
+8. `OrgTable` derives visible rows from the memoized row list plus local sort
+   / debounced name-filter state. It does not refetch and does not re-run
+   aggregation.
 
 ```
 GET /api/org-tree
         → fetchOrgTree (zod)
         → queryCacheStore (OrgNode[])
         → useOrgTree / useQueryCache
-        → App (status) + OrgTreeView
-                → buildTree → TreeNodeItem
+        → App (status) + OrgDashboard
+                → aggregateOrgTree → Map<id, NodeRollup>   (useMemo)
+                → buildTableRows   → OrgTableRow[]         (useMemo)
+                → OrgTreeView (buildTree) + OrgTable (sort/filter)
+                → selectedId (one piece of UI state, both views)
 ```
+
+## Layout (Stage 02)
+
+Viewport ≥ `SPLIT_VIEW_MIN_WIDTH_PX` (1280): tree and table side by side.
+Narrower: Tree / Table toggle. ADR 004.
 
 ## Single source of truth
 
 The only stored dataset is the validated flat `OrgNode[]` in the query cache.
-The tree (Stage 01) and the table (Stage 02) must both read that array.
-Aggregates are derived and memoized, never a second copy of the tree.
+The tree and the table both read that array. Aggregates are a memoized `Map`
+derived from it, never written back onto `OrgNode` and never a parallel cache
+entry.
 
 Do not transform to a nested tree inside `fetchOrgTree` or the cache.
 Do not keep a parallel nested structure that must be kept in sync.
+Do not keep a second `selectedId` inside the tree after Stage 02 — the
+dashboard lifts it so a table row click can highlight the tree node.
 
 ## Client / server split
 
@@ -79,10 +97,8 @@ nginx proxying.
 
 ## What is not here yet
 
-- **Stage 02** — analytical table over the same cache entry; pure aggregation
-  in `src/aggregation`; selection sync by node id (tree already has
-  `selectedId`).
 - **Stage 03** — live transport, in-place cache patch, ancestor-only
-  aggregate invalidation, connection indicator. Contract: `docs/data-model.md`
+  aggregate invalidation (`rollupFromSelfAndChildren` is the hook; see
+  ADR 005), connection indicator. Contract: `docs/data-model.md`
   (section still a stub).
 - **Stage 04** — Docker / nginx / gzip budget; AI search module.

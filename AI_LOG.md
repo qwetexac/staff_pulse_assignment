@@ -61,3 +61,54 @@
 4. **Mock data is generated**, not hardcoded; fixed seed `424242` for
    determinism across restarts.
 5. **No Express** — Node `http` only for the mock server (YAGNI).
+
+## Stage 02 — Core
+
+### Generated as-is (lightly edited)
+
+- `src/aggregation`: `aggregateOrgTree` + `rollupFromSelfAndChildren`, Vitest
+  cases (empty tree, leaf, one descendant, zero headcount)
+- `src/table`: analytical table, column sort (click / double-click reverse),
+  name filter, budget `$12,345,678` formatting, row → `selectedId`
+- `src/OrgDashboard`: memoized rollups/rows, shared selection, split-view at
+  1280px with a Tree/Table toggle below that
+- `useDebouncedValue` (250ms) and named layout/filter constants
+- ADRs 004 (layout) and 005 (aggregation memoization)
+- Vitest runner (`npm run test`) wired through `vite.config.ts`
+
+### Rewritten by hand (and why)
+
+- **Selection is lifted, not copied.** First sketch kept `selectedId` inside
+  `OrgTreeView` and added a second copy for the table; that violates the
+  single-source rule for UI selection. Dashboard owns one `selectedId`.
+- **Sort click vs double-click.** A naive “click toggles direction” fights
+  the `dblclick` sequence (click, click, dblclick). Click on a new column
+  sets ascending and is a no-op if that column is already active; double-click
+  reverses.
+- **Aggregation helper split.** Full-forest `useMemo` is enough for Stage 02,
+  but a single DFS function would make Stage 03 ancestor-only updates awkward.
+  `rollupFromSelfAndChildren` + `weightedPerformanceSum` are the seam; they
+  are not a live-update implementation.
+
+### Flag for Stage 03
+
+- `useMemo(..., [nodes])` recomputes the **entire** Map when the array
+  identity changes, and **nothing** if the same array is mutated in place.
+  Live patches should update the rollup `Map` via `parentId` +
+  `rollupFromSelfAndChildren` (ADR 005), not reuse this memo.
+- Below 1280px, a table row click stores selection but the tree is hidden
+  until the user toggles — expected for the chosen layout (ADR 004).
+
+### Autonomous decisions
+
+1. **Hybrid layout**: split-view ≥1280px, toggle on narrower screens (ADR 004),
+   so row→tree highlight is visible on desktop without crowding small viewports.
+2. **Both panes stay mounted**; CSS hides the inactive one so filter/sort
+   survive toggling.
+3. **Table-only name filter** (spec sits under the table). Tree is not
+   filtered.
+4. **Expand ancestors** when `selectedId` changes so a table click can reveal
+   a collapsed node.
+5. **Vitest** as the test runner (same Vite config, node environment, no jsdom
+   for a pure function).
+

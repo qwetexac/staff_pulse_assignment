@@ -22,7 +22,8 @@ export const NodeRow = styled.div<{ $selected?: boolean }>`
     $selected ? theme.colors.brandSoft : 'transparent'};
 
   &:hover {
-    background: ${({ theme }) => theme.colors.background};
+    background: ${({ theme, $selected }) =>
+      $selected ? theme.colors.brandSoft : theme.colors.background};
   }
 `
 

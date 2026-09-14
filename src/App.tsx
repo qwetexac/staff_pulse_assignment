@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useOrgTree } from '@/api/useOrgTree'
+import { OrgDashboard } from '@/OrgDashboard'
 import {
   AppShell,
   Header,
@@ -10,7 +11,6 @@ import {
   Subtitle,
   Title,
 } from '@/shared/ui'
-import { OrgTreeView } from '@/tree'
 
 function LoadingState() {
   return (
@@ -41,31 +41,42 @@ function EmptyState() {
   )
 }
 
+function AppHeader() {
+  return (
+    <Header>
+      <Title>Staff Pulse</Title>
+      <Subtitle>
+        Organization structure — divisions, departments, and teams
+      </Subtitle>
+    </Header>
+  )
+}
+
 export default function App() {
   const { data, error, isLoading } = useOrgTree()
 
+  if (!isLoading && error === null && data !== undefined && data.length > 0) {
+    return (
+      <AppShell>
+        <AppHeader />
+        <OrgDashboard nodes={data} />
+      </AppShell>
+    )
+  }
+
   let content: ReactNode
 
-  if (isLoading) {
+  if (isLoading || (data === undefined && error === null)) {
     content = <LoadingState />
   } else if (error) {
     content = <ErrorState message={error.message} />
-  } else if (data !== undefined && data.length === 0) {
-    content = <EmptyState />
-  } else if (data !== undefined) {
-    content = <OrgTreeView nodes={data} />
   } else {
-    content = <LoadingState />
+    content = <EmptyState />
   }
 
   return (
     <AppShell>
-      <Header>
-        <Title>Staff Pulse</Title>
-        <Subtitle>
-          Organization structure — divisions, departments, and teams
-        </Subtitle>
-      </Header>
+      <AppHeader />
       <Panel>{content}</Panel>
     </AppShell>
   )

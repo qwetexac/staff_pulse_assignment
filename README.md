@@ -33,8 +33,8 @@ mock-server/    # standalone mock API (in-memory; live updates in stage 03)
 docs/           # architecture.md, data-model.md, requirements.md, adr/
 ```
 
-Stage 01 is the tree + cache. Table, aggregation, and realtime modules are
-not in the repo yet — do not expect those folders.
+Stage 02 adds the analytical table and aggregation over the same cached
+org-tree array. Realtime lives in Stage 03 — do not expect `src/realtime`.
 
 ## Development stages
 
@@ -50,18 +50,24 @@ not in the repo yet — do not expect those folders.
 See [`AI_LOG.md`](AI_LOG.md) for the stage-by-stage log. Summary so far:
 
 - **Tools used**: Cursor (agent)
-- **Generated as-is**: scaffold wiring, seeded mock org-tree generator, zod
-  schemas, SWR cache hook, tree view + styled-components shell
-- **Rewritten by hand**: cache abort ref-counting, hook/lint fixes, default
-  expansion (roots + children), native Vite tsconfig paths — see `AI_LOG.md`
-- **Rough split (stage 01)**: mostly agent-generated with targeted rewrites
-  for lint, SWR abort semantics, and requirements review fixes
+- **Generated as-is**: scaffold, mock org-tree, SWR cache, tree view,
+  aggregation + table, Vitest cases, ADRs 001–005
+- **Rewritten / decided**: cache abort semantics (stage 01); split-view at
+  1280px plus a narrow toggle; `useMemo` aggregation keyed only on `nodes`
+  with `rollupFromSelfAndChildren` for later ancestor-only updates — see
+  `AI_LOG.md`
+- **Rough split**: mostly agent-generated with review against requirements
+  (weighted average, debounce, single `selectedId`)
 
 ## Testing
 
-No test runner yet (lands with the Stage 02 aggregation function). The
-algorithm those tests must implement is specified in
-[`docs/data-model.md`](docs/data-model.md).
+```bash
+npm run test          # aggregation unit tests (Vitest)
+```
+
+Cases required by [`docs/data-model.md`](docs/data-model.md): empty tree, a
+leaf with no children, a node with one descendant (headcount-weighted
+average). Zero-headcount → average 0 is also covered.
 
 To exercise client empty / error UI against the mock API:
 
@@ -79,7 +85,7 @@ TODO — add screenshots or a GIF of the final result here.
 - [`AGENTS.md`](AGENTS.md) — conventions and constraints for AI agents
 - [`docs/requirements.md`](docs/requirements.md) — assignment scope and stages
 - [`docs/architecture.md`](docs/architecture.md) — layers and data flow
-  (Stage 01 as implemented)
+  (Stage 02 as implemented)
 - [`docs/data-model.md`](docs/data-model.md) — node shape, tree, aggregation
   spec; live-update patch contract is a Stage 03 stub
 - [`docs/adr/`](docs/adr/) — architecture decision records
