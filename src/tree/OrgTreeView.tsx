@@ -1,12 +1,15 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { OrgNode } from '@/api/types'
+import type { AppliedOrgNodePatch } from '@/realtime/types'
 import { buildTree, getDefaultExpandedIds } from '@/tree/buildTree'
 import { TreeNodeItem } from '@/tree/TreeNodeItem'
 import { TreeList } from '@/tree/Tree.styles'
 
 type OrgTreeViewProps = {
   nodes: readonly OrgNode[]
+  dataRevision: number
   selectedId: string | null
+  lastPatch: AppliedOrgNodePatch | null
   onSelect: (id: string) => void
 }
 
@@ -41,10 +44,15 @@ function getAncestorIds(
 
 export function OrgTreeView({
   nodes,
+  dataRevision,
   selectedId,
+  lastPatch,
   onSelect,
 }: OrgTreeViewProps) {
-  const roots = useMemo(() => buildTree(nodes), [nodes])
+  const roots = useMemo(() => {
+    void dataRevision
+    return buildTree(nodes)
+  }, [nodes, dataRevision])
   const rootSignature = roots.map((root) => root.id).join('|')
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
@@ -99,6 +107,7 @@ export function OrgTreeView({
           node={root}
           expandedIds={expandedIds}
           selectedId={selectedId}
+          lastPatch={lastPatch}
           onToggle={handleToggle}
           onSelect={onSelect}
         />

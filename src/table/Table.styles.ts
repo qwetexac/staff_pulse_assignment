@@ -1,8 +1,45 @@
-import styled from 'styled-components'
+import styled, { css, keyframes } from 'styled-components'
 import {
+  CELL_FLASH_DURATION_MS,
   PANE_BODY_MAX_HEIGHT,
   SPLIT_VIEW_MIN_WIDTH_PX,
 } from '@/shared/constants'
+import { theme } from '@/shared/theme'
+
+const cellFlash = keyframes`
+  from {
+    background-color: ${theme.colors.flash};
+  }
+  to {
+    background-color: transparent;
+  }
+`
+
+const flashChrome = css<{ $flashing?: boolean }>`
+  ${({ $flashing }) =>
+    $flashing
+      ? css`
+          animation: ${cellFlash} ${CELL_FLASH_DURATION_MS}ms ease-out both;
+
+          @media (prefers-reduced-motion: reduce) {
+            animation: none;
+          }
+        `
+      : ''}
+`
+
+const keyboardFocusChrome = css<{ $keyboardFocused?: boolean }>`
+  ${({ theme: appTheme, $keyboardFocused }) =>
+    $keyboardFocused
+      ? css`
+          outline: 2px solid ${appTheme.colors.focus};
+          outline-offset: -2px;
+          box-shadow: inset 0 0 0 2px ${appTheme.colors.surface};
+        `
+      : css`
+          outline: none;
+        `}
+`
 
 const splitView = `@media (min-width: ${SPLIT_VIEW_MIN_WIDTH_PX}px)`
 
@@ -132,13 +169,24 @@ export const BodyRow = styled.tr<{ $selected?: boolean }>`
     background: ${({ theme, $selected }) =>
       $selected ? theme.colors.brandSoft : theme.colors.background};
   }
+
+  &:focus-within {
+    background: ${({ theme, $selected }) =>
+      $selected ? theme.colors.brandSoft : theme.colors.background};
+  }
 `
 
-export const Cell = styled.td<{ $numeric?: boolean }>`
+export const Cell = styled.td<{
+  $numeric?: boolean
+  $keyboardFocused?: boolean
+  $flashing?: boolean
+}>`
   padding: ${({ theme }) => theme.space.sm} ${({ theme }) => theme.space.md};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   text-align: ${({ $numeric }) => ($numeric ? 'right' : 'left')};
   color: ${({ theme }) => theme.colors.text};
+  ${flashChrome}
+  ${keyboardFocusChrome}
 `
 
 export const NameCell = styled(Cell)<{ $depth: number }>`

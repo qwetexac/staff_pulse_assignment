@@ -33,8 +33,9 @@ mock-server/    # standalone mock API (in-memory; live updates in stage 03)
 docs/           # architecture.md, data-model.md, requirements.md, adr/
 ```
 
-Stage 02 adds the analytical table and aggregation over the same cached
-org-tree array. Realtime lives in Stage 03 — do not expect `src/realtime`.
+Stage 03 adds SSE live patches over the same cached array, ancestor-only
+rollup updates, cell fade, keyboard table nav, and animated tree collapse.
+AI search and Docker live in Stage 04 — do not expect `src/ai-search`.
 
 ## Development stages
 
@@ -51,10 +52,10 @@ See [`AI_LOG.md`](AI_LOG.md) for the stage-by-stage log. Summary so far:
 
 - **Tools used**: Cursor (agent)
 - **Generated as-is**: scaffold, mock org-tree, SWR cache, tree view,
-  aggregation + table, Vitest cases, ADRs 001–005
+  aggregation + table, SSE live patches, Vitest cases, ADRs 001–007
 - **Rewritten / decided**: cache abort semantics (stage 01); split-view at
-  1280px plus a narrow toggle; `useMemo` aggregation keyed only on `nodes`
-  with `rollupFromSelfAndChildren` for later ancestor-only updates — see
+  1280px plus a narrow toggle; ancestor-only rollups instead of `useMemo` on
+  array identity for live patches; SSE over WebSocket/polling — see
   `AI_LOG.md`
 - **Rough split**: mostly agent-generated with review against requirements
   (weighted average, debounce, single `selectedId`)
@@ -62,7 +63,7 @@ See [`AI_LOG.md`](AI_LOG.md) for the stage-by-stage log. Summary so far:
 ## Testing
 
 ```bash
-npm run test          # aggregation unit tests (Vitest)
+npm run test          # aggregation, ancestor recompute, patch, backoff, keyboard (Vitest)
 ```
 
 Cases required by [`docs/data-model.md`](docs/data-model.md): empty tree, a
@@ -85,7 +86,7 @@ TODO — add screenshots or a GIF of the final result here.
 - [`AGENTS.md`](AGENTS.md) — conventions and constraints for AI agents
 - [`docs/requirements.md`](docs/requirements.md) — assignment scope and stages
 - [`docs/architecture.md`](docs/architecture.md) — layers and data flow
-  (Stage 02 as implemented)
-- [`docs/data-model.md`](docs/data-model.md) — node shape, tree, aggregation
-  spec; live-update patch contract is a Stage 03 stub
+  (Stage 03 as implemented)
+- [`docs/data-model.md`](docs/data-model.md) — node shape, tree, aggregation,
+  SSE patch contract
 - [`docs/adr/`](docs/adr/) — architecture decision records

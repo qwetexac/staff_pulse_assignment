@@ -40,19 +40,9 @@ export function rollupFromSelfAndChildren(
   }
 }
 
-/**
- * Bottom-up rollups for every node: totals include the node itself and all
- * descendants; average performance is weighted by headcount.
- * Returns an empty Map for an empty input (does not throw).
- */
-export function aggregateOrgTree(
+export function groupChildrenByParentId(
   nodes: readonly OrgNode[],
-): Map<string, NodeRollup> {
-  const rollups = new Map<string, NodeRollup>()
-  if (nodes.length === 0) {
-    return rollups
-  }
-
+): Map<string, OrgNode[]> {
   const childrenByParentId = new Map<string, OrgNode[]>()
 
   for (const node of nodes) {
@@ -66,6 +56,24 @@ export function aggregateOrgTree(
       childrenByParentId.set(node.parentId, [node])
     }
   }
+
+  return childrenByParentId
+}
+
+/**
+ * Bottom-up rollups for every node: totals include the node itself and all
+ * descendants; average performance is weighted by headcount.
+ * Returns an empty Map for an empty input (does not throw).
+ */
+export function aggregateOrgTree(
+  nodes: readonly OrgNode[],
+): Map<string, NodeRollup> {
+  const rollups = new Map<string, NodeRollup>()
+  if (nodes.length === 0) {
+    return rollups
+  }
+
+  const childrenByParentId = groupChildrenByParentId(nodes)
 
   const visiting = new Set<string>()
 

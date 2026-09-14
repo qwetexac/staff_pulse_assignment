@@ -1,5 +1,16 @@
-import styled from 'styled-components'
+import styled, { css, keyframes } from 'styled-components'
 import type { PerformanceLevel } from '@/tree/performance'
+import { CELL_FLASH_DURATION_MS, TREE_EXPAND_DURATION_MS } from '@/shared/constants'
+import { theme } from '@/shared/theme'
+
+const metricFlash = keyframes`
+  from {
+    background-color: ${theme.colors.flash};
+  }
+  to {
+    background-color: transparent;
+  }
+`
 
 export const TreeList = styled.ul`
   list-style: none;
@@ -64,10 +75,23 @@ export const NodeSelectButton = styled.button`
   }
 `
 
-export const Headcount = styled.span`
+export const Headcount = styled.span<{ $flashing?: boolean }>`
   color: ${({ theme }) => theme.colors.textMuted};
   font-variant-numeric: tabular-nums;
   font-size: 0.92rem;
+  border-radius: ${({ theme }) => theme.radii.sm};
+  padding: 0 ${({ theme }) => theme.space.xs};
+
+  ${({ $flashing }) =>
+    $flashing
+      ? css`
+          animation: ${metricFlash} ${CELL_FLASH_DURATION_MS}ms ease-out both;
+
+          @media (prefers-reduced-motion: reduce) {
+            animation: none;
+          }
+        `
+      : ''}
 `
 
 export const PerformanceDot = styled.span<{ $level: PerformanceLevel }>`
@@ -84,4 +108,19 @@ export const ChildList = styled.ul`
   padding: 0 0 0 ${({ theme }) => theme.space.lg};
   border-left: 1px solid ${({ theme }) => theme.colors.border};
   margin-left: 13px;
+`
+
+export const CollapseTrack = styled.div<{ $open: boolean }>`
+  display: grid;
+  grid-template-rows: ${({ $open }) => ($open ? '1fr' : '0fr')};
+  transition: grid-template-rows ${TREE_EXPAND_DURATION_MS}ms ease;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+export const CollapseInner = styled.div`
+  overflow: hidden;
+  min-height: 0;
 `

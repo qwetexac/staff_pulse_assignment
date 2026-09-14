@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react'
 import type { TreeNode } from '@/tree/buildTree'
 import { getPerformanceLevel } from '@/tree/performance'
+import type { AppliedOrgNodePatch } from '@/realtime/types'
 import {
   ChildList,
+  CollapseInner,
+  CollapseTrack,
   Headcount,
   NodeRow,
   NodeSelectButton,
@@ -15,14 +18,27 @@ type TreeNodeItemProps = {
   node: TreeNode
   expandedIds: ReadonlySet<string>
   selectedId: string | null
+  lastPatch: AppliedOrgNodePatch | null
   onToggle: (id: string) => void
   onSelect: (id: string) => void
+}
+
+function ownMetricChanged(
+  lastPatch: AppliedOrgNodePatch | null,
+  nodeId: string,
+  metric: 'headcount' | 'performance',
+): boolean {
+  if (lastPatch === null || lastPatch.nodeId !== nodeId) {
+    return false
+  }
+  return lastPatch.previous[metric] !== lastPatch.next[metric]
 }
 
 export function TreeNodeItem({
   node,
   expandedIds,
   selectedId,
+  lastPatch,
   onToggle,
   onSelect,
 }: TreeNodeItemProps) {
@@ -31,6 +47,7 @@ export function TreeNodeItem({
   const isSelected = selectedId === node.id
   const performanceLevel = getPerformanceLevel(node.performance)
   const rowRef = useRef<HTMLDivElement>(null)
+  const flashHeadcount = ownMetricChanged(lastPatch, node.id, 'headcount')
 
   useEffect(() => {
     if (!isSelected) {
@@ -74,22 +91,40 @@ export function TreeNodeItem({
           {node.name}
         </NodeSelectButton>
 
-        <Headcount>{node.headcount} people</Headcount>
+        <Headcount
+          key={
+            flashHeadcount
+              ? `flash-${lastPatch?.revision ?? 'idle'}`
+              : 'headcount'
+          }
+          $flashing={flashHeadcount}
+        >
+          {node.headcount} people
+        </Headcount>
       </NodeRow>
 
-      {hasChildren && isExpanded ? (
-        <ChildList role="group">
-          {node.children.map((child) => (
-            <TreeNodeItem
-              key={child.id}
-              node={child}
-              expandedIds={expandedIds}
-              selectedId={selectedId}
-              onToggle={onToggle}
-              onSelect={onSelect}
-            />
-          ))}
-        </ChildList>
+      {hasChildren ? (
+        <CollapseTrack
+          $open={isExpanded}
+          aria-hidden={!isExpanded}
+          inert={!isExpanded}
+        >
+          <CollapseInner>
+            <ChildList role="group">
+              {node.children.map((child) => (
+                <TreeNodeItem
+                  key={child.id}
+                  node={child}
+                  expandedIds={expandedIds}
+                  selectedId={selectedId}
+                  lastPatch={lastPatch}
+                  onToggle={onToggle}
+                  onSelect={onSelect}
+                />
+              ))}
+            </ChildList>
+          </CollapseInner>
+        </CollapseTrack>
       ) : null}
     </TreeItem>
   )

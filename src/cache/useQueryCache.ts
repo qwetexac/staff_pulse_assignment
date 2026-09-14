@@ -15,6 +15,8 @@ export type UseQueryCacheResult<T> = {
   isLoading: boolean
   isValidating: boolean
   isStale: boolean
+  /** Bumped on fetch and in-place patch so views can rebuild derived copies. */
+  revision: number
 }
 
 /**
@@ -102,5 +104,6 @@ export function useQueryCache<T>(
     isLoading,
     isValidating,
     isStale,
+    revision: entry?.revision ?? 0,
   }
 }

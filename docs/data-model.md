@@ -1,7 +1,7 @@
 # Data model
 
-Status: node shape, tree construction, and aggregation are **implemented**
-(Stage 02). The live-update patch contract is a stub until Stage 03.
+Status: node shape, tree construction, aggregation, and the live-update
+patch contract are **implemented** (Stage 03).
 
 ## `OrgNode` (API and cache)
 
@@ -77,11 +77,10 @@ If `totalHeadcount(n) === 0`, `averagePerformance(n)` is `0` (avoid divide
 by zero; a zero-headcount node contributes nothing to a parent's weighted
 average).
 
-Aggregation is computed once after data loads and memoized in `OrgDashboard`
-(`useMemo` on `nodes`; ADR 005). Do not store rollups on `OrgNode`. The
-returned `NodeRollup` includes `weightedPerformanceSum` so Stage 03 can
-recompute only the patched node and its ancestors via
-`rollupFromSelfAndChildren`, not the whole forest.
+Aggregation is computed once after data loads (`aggregateOrgTree`) and then
+updated incrementally on live patches (`recomputeAncestorRollups` — ADR 007).
+Do not store rollups on `OrgNode`. `NodeRollup.weightedPerformanceSum` lets
+a parent recombine itself with children without re-walking the subtree.
 
 ### Worked examples (unit-test cases)
 
@@ -108,16 +107,47 @@ averagePerformance `(4*50 + 6*100) / 10 = 80`.
 
 `[]` → no rows; the aggregator returns an empty structure (no throw).
 
-## Live-update patch contract (Stage 03 — not implemented)
+## Live-update patch contract (Stage 03 — implemented)
 
-No realtime endpoint exists yet. `env.example` reserves
-`VITE_REALTIME_URL` for when one does.
+Transport: **SSE** (ADR 006).
 
-When Stage 03 lands, this section must document:
+| | |
+|---|---|
+| URL | `VITE_REALTIME_URL` (default `http://localhost:4000/api/org-tree/stream`) |
+| Method | `GET` |
+| Response | `Content-Type: text/event-stream` |
+| Heartbeat | SSE comment `: ping` every 15s (not a client event) |
+| Client reconnect | Close `EventSource` on error; wait 1s, 2s, 4s, … cap 30s |
 
-- Transport (SSE, WebSocket, or polling) and URL
-- Payload: which fields of which `id` changed
-- How the client patches the cached `OrgNode[]` **in place** (no full
-  refetch) and which aggregates to invalidate (affected node + ancestors)
+The server mutates the **same in-memory `OrgNode[]`** used by
+`GET /api/org-tree`, then broadcasts one default `message` event:
 
-Until then, do not add a client or server stream “for later”.
+```
+data: {"id":"team-042","headcount":18,"budget":240000,"performance":73,"updatedAt":"2026-09-14T18:22:01.004Z"}
+
+```
+
+Payload (zod `OrgNodePatchSchema` in `src/realtime/types.ts`):
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | `string` | Existing node. Unknown ids are ignored. |
+| `headcount` | `number` | `≥ 0`. Replaces the node’s own headcount. |
+| `budget` | `number` | `≥ 0`. Replaces the node’s own budget. |
+| `performance` | `number` | `0–100`. Replaces the node’s own performance. |
+| `updatedAt` | ISO-8601 | Must be **newer** than the cached node’s `updatedAt` or the client skips. |
+
+`name` and `parentId` are **not** in the patch. Hierarchy does not change.
+
+### Client apply
+
+1. Find the node in the cached `OrgNode[]` and mutate its metric fields
+   (same object, same array).
+2. Notify cache subscribers (`revision++`, `updatedAt` now) — **no refetch**.
+3. Recompute rollups for that id and each ancestor via `parentId`
+   (`recomputeAncestorRollups`). Other Map entries keep the same objects.
+4. Fade table cells whose **rollup** values changed (patched node +
+   ancestors). Tree headcount fades only on the patched node (own metrics).
+
+Stale or no-op metric payloads do not notify the UI. After the stream
+reconnects, one full GET resyncs any nodes missed while disconnected.

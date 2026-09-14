@@ -11,6 +11,8 @@ export const theme = {
     focus: '#2a8f64',
     danger: '#9b2c2c',
     dangerSoft: '#fce8e8',
+    flash: '#ffe08a',
+    warning: '#b5811a',
     performance: {
       high: '#2f7d4a',
       medium: '#b5811a',

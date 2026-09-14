@@ -25,6 +25,31 @@ export type SortState = {
   direction: SortDirection
 }
 
+/** Single click: sort this column ascending (including resetting DESC → ASC). */
+export function nextSortOnClick(
+  current: SortState | null,
+  column: SortColumn,
+): SortState {
+  if (current?.column === column && current.direction === 'asc') {
+    return current
+  }
+  return { column, direction: 'asc' }
+}
+
+/** Double-click: reverse the active column, or start this column descending. */
+export function nextSortOnDoubleClick(
+  current: SortState | null,
+  column: SortColumn,
+): SortState {
+  if (current?.column !== column) {
+    return { column, direction: 'desc' }
+  }
+  return {
+    column,
+    direction: current.direction === 'asc' ? 'desc' : 'asc',
+  }
+}
+
 export const TABLE_COLUMNS: ReadonlyArray<{
   column: SortColumn
   label: string

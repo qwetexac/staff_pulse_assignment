@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { OrgNode } from '@/api/types'
+import type { AppliedOrgNodePatch } from '@/realtime/types'
 import { useOrgTableRows } from '@/aggregation/useOrgTableRows'
 import { OrgTable } from '@/table'
 import { OrgTreeView } from '@/tree'
@@ -17,14 +18,20 @@ import {
 
 type OrgDashboardProps = {
   nodes: readonly OrgNode[]
+  dataRevision: number
+  lastPatch: AppliedOrgNodePatch | null
 }
 
 type NarrowView = 'tree' | 'table'
 
-export function OrgDashboard({ nodes }: OrgDashboardProps) {
+export function OrgDashboard({
+  nodes,
+  dataRevision,
+  lastPatch,
+}: OrgDashboardProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [narrowView, setNarrowView] = useState<NarrowView>('tree')
-  const rows = useOrgTableRows(nodes)
+  const { rows, flashes } = useOrgTableRows(nodes, lastPatch)
 
   return (
     <DashboardRoot>
@@ -60,7 +67,9 @@ export function OrgDashboard({ nodes }: OrgDashboardProps) {
           <TreeScroll>
             <OrgTreeView
               nodes={nodes}
+              dataRevision={dataRevision}
               selectedId={selectedId}
+              lastPatch={lastPatch}
               onSelect={setSelectedId}
             />
           </TreeScroll>
@@ -69,6 +78,7 @@ export function OrgDashboard({ nodes }: OrgDashboardProps) {
           <PaneTitle>Analytical table</PaneTitle>
           <OrgTable
             rows={rows}
+            flashes={flashes}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />

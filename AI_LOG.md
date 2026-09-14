@@ -112,3 +112,58 @@
 5. **Vitest** as the test runner (same Vite config, node environment, no jsdom
    for a pure function).
 
+## Stage 03 — Polish
+
+### Generated as-is (lightly edited)
+
+- Mock SSE endpoint `GET /api/org-tree/stream` plus random in-memory metric
+  jitter (~2.5s) on the same array as `GET /api/org-tree`
+- `src/realtime`: EventSource client, exponential backoff (1s…30s), zod
+  patch schema, in-place `applyOrgNodePatch`, header `ConnectionStatus`
+- Cache `patchData` / `revalidate` and a `revision` bump so
+  `useSyncExternalStore` re-renders when the array reference is unchanged
+- `recomputeAncestorRollups` + tests (chain-only writes, identity of
+  unrelated rollups, match full re-aggregate)
+- Table cell fade (~1.5s) keyed by `(nodeId, metric)` from the rollup diff;
+  keyboard grid (arrows, Home/End, Enter → `selectedId`)
+- Tree collapse via `grid-template-rows` 0fr/1fr; `transition: none` under
+  `prefers-reduced-motion: reduce`
+- ADRs 006 (SSE) and 007 (ancestor-only recompute); data-model patch contract
+
+### Rewritten by hand (and why)
+
+- **Did not reuse Stage 02 `useMemo(..., [nodes])` for patches.** As flagged
+  in this log, that memo either skips in-place mutations or recomputes the
+  whole forest. `useOrgTableRows` full-aggregates only when the array is
+  replaced (GET / reconnect).
+- **Close EventSource on error** instead of using the browser’s built-in
+  retry, so backoff and the disconnected/reconnecting labels are ours.
+- **Pause SWR while connected** (`staleTime: Infinity`) so a 5s revalidate
+  cannot overwrite a live patch with a slightly older GET.
+- **Cell fade without `Date.now()` / refs during render** (react-hooks
+  purity). Flash tokens live in the rollup state; a CSS animation class is
+  remounted only when the token changes, not on sort/filter.
+- **Keyboard focus via `data-focus-cell` + querySelector** rather than
+  callback refs through cell wrappers (eslint `react-hooks/refs`).
+
+### Flag for Stage 04 / review
+
+- Reconnect GET vs a patch that lands during the 400ms mock delay can briefly
+  lose that one event; the next SSE message heals it.
+- Below 1280px, Enter still sets `selectedId` while the tree pane is hidden
+  (same layout trade-off as Stage 02).
+- `buildTree` still copies node fields, so the tree depends on `dataRevision`
+  to pick up in-place metric edits.
+
+### Autonomous decisions
+
+1. **SSE, not WebSocket or polling** (ADR 006): one-way updates, one HTTP
+   connection, custom backoff after we close the EventSource.
+2. **In-place object mutation** of the cached node; cache entry identity
+   changes so React notices.
+3. **Ancestor walk only** for rollups (ADR 007); children maps are structural
+   O(n), the formula runs at depth.
+4. **Connection states**: reconnecting on first mount / retry attempt,
+   disconnected after error while backing off, connected on `EventSource`
+   open.
+

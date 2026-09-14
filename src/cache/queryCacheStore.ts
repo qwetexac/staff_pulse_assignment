@@ -5,9 +5,16 @@ type CacheEntry<T> = {
   promise: Promise<T> | null
   controller: AbortController | null
   subscriberCount: number
+  /**
+   * Bumped on every `setEntry` so `useSyncExternalStore` sees a new snapshot
+   * even when `data` is the same array mutated in place.
+   */
+  revision: number
 }
 
 type Listener = () => void
+
+type CacheEntryWrite<T> = Omit<CacheEntry<T>, 'revision'>
 
 const cache = new Map<string, CacheEntry<unknown>>()
 const listeners = new Map<string, Set<Listener>>()
@@ -16,8 +23,13 @@ function getEntry<T>(key: string): CacheEntry<T> | undefined {
   return cache.get(key) as CacheEntry<T> | undefined
 }
 
-function setEntry<T>(key: string, entry: CacheEntry<T>): void {
-  cache.set(key, entry as CacheEntry<unknown>)
+function setEntry<T>(key: string, entry: CacheEntryWrite<T>): void {
+  const previous = getEntry<T>(key)
+  const next: CacheEntry<T> = {
+    ...entry,
+    revision: (previous?.revision ?? 0) + 1,
+  }
+  cache.set(key, next as CacheEntry<unknown>)
   notify(key)
 }
 
@@ -62,6 +74,7 @@ function ensureEntry<T>(key: string): CacheEntry<T> {
     promise: null,
     controller: null,
     subscriberCount: 0,
+    revision: 0,
   }
   // Insert without notifying — subscribers must not see a settled empty
   // entry before the in-flight promise is attached.
@@ -69,17 +82,11 @@ function ensureEntry<T>(key: string): CacheEntry<T> {
   return created
 }
 
-/**
- * Starts (or joins) a fetch for `key`. Each caller should pair this with
- * `releaseQuery` so the shared AbortController only fires when the last
- * subscriber unmounts / disables.
- */
-function acquireQuery<T>(
+function startFetch<T>(
   key: string,
   queryFn: (signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
   const entry = ensureEntry<T>(key)
-  entry.subscriberCount += 1
 
   if (entry.promise) {
     return entry.promise
@@ -132,12 +139,68 @@ function acquireQuery<T>(
     })
 
   setEntry<T>(key, {
-    ...entry,
+    data: entry.data,
+    updatedAt: entry.updatedAt,
+    error: entry.error,
+    subscriberCount: entry.subscriberCount,
     promise,
     controller,
   })
 
   return promise
+}
+
+/**
+ * Starts (or joins) a fetch for `key`. Each caller should pair this with
+ * `releaseQuery` so the shared AbortController only fires when the last
+ * subscriber unmounts / disables.
+ */
+function acquireQuery<T>(
+  key: string,
+  queryFn: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const entry = ensureEntry<T>(key)
+  entry.subscriberCount += 1
+  return startFetch(key, queryFn)
+}
+
+/**
+ * Re-runs the query without bumping subscriberCount. Used after an SSE
+ * reconnect to catch updates missed while the stream was down.
+ */
+function revalidate<T>(
+  key: string,
+  queryFn: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  return startFetch(key, queryFn)
+}
+
+/**
+ * Mutates the cached value in place and notifies subscribers. `mutate`
+ * must return `null` to skip the notify (e.g. unknown id / stale patch).
+ * Replaces the cache entry object so `useSyncExternalStore` re-renders
+ * even when the array reference is unchanged.
+ */
+function patchData<T, R>(key: string, mutate: (data: T) => R | null): R | null {
+  const entry = getEntry<T>(key)
+  if (entry?.data === undefined) {
+    return null
+  }
+
+  const applied = mutate(entry.data)
+  if (applied === null) {
+    return null
+  }
+
+  setEntry<T>(key, {
+    data: entry.data,
+    updatedAt: Date.now(),
+    error: null,
+    promise: entry.promise,
+    controller: entry.controller,
+    subscriberCount: entry.subscriberCount,
+  })
+  return applied
 }
 
 function releaseQuery(key: string): void {
@@ -168,7 +231,10 @@ function releaseQuery(key: string): void {
 
     controller.abort()
     setEntry(key, {
-      ...current,
+      data: current.data,
+      updatedAt: current.updatedAt,
+      error: current.error,
+      subscriberCount: current.subscriberCount,
       promise: null,
       controller: null,
     })
@@ -187,4 +253,6 @@ export const queryCacheStore = {
   isFresh,
   acquireQuery,
   releaseQuery,
+  revalidate,
+  patchData,
 }

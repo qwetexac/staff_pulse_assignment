@@ -1,6 +1,11 @@
 import { config as loadEnv } from 'dotenv'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { generateOrgTree } from './generateOrgTree.ts'
+import {
+  applyRandomNodePatch,
+  LIVE_UPDATE_INTERVAL_MS,
+  SSE_HEARTBEAT_MS,
+} from './liveUpdates.ts'
 
 loadEnv()
 
@@ -13,6 +18,7 @@ const PORT = Number(process.env.PORT ?? DEFAULT_PORT)
 const FORCE_MODE = process.env.MOCK_FORCE ?? ''
 
 const orgTree = generateOrgTree()
+const sseClients = new Set<ServerResponse>()
 
 function sendJson(
   response: ServerResponse,
@@ -58,6 +64,55 @@ async function handleOrgTree(
   sendJson(response, 200, orgTree)
 }
 
+function writeSse(response: ServerResponse, chunk: string): boolean {
+  if (response.writableEnded) {
+    return false
+  }
+  return response.write(chunk)
+}
+
+function handleOrgTreeStream(
+  request: IncomingMessage,
+  response: ServerResponse,
+): void {
+  response.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'X-Accel-Buffering': 'no',
+  })
+  response.flushHeaders()
+  writeSse(response, ': connected\n\n')
+  sseClients.add(response)
+
+  const keepAlive = request.socket
+  keepAlive?.setTimeout(0)
+  keepAlive?.setNoDelay(true)
+  keepAlive?.setKeepAlive(true)
+
+  const remove = () => {
+    sseClients.delete(response)
+  }
+
+  request.on('close', remove)
+  response.on('close', remove)
+  response.on('error', remove)
+}
+
+function broadcastPatch(patch: ReturnType<typeof applyRandomNodePatch>): void {
+  if (!patch) {
+    return
+  }
+
+  const chunk = `data: ${JSON.stringify(patch)}\n\n`
+  for (const client of sseClients) {
+    if (!writeSse(client, chunk)) {
+      sseClients.delete(client)
+    }
+  }
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms)
@@ -78,12 +133,35 @@ const server = createServer((request, response) => {
     return
   }
 
+  if (method === 'GET' && url.pathname === '/api/org-tree/stream') {
+    handleOrgTreeStream(request, response)
+    return
+  }
+
   sendJson(response, 404, { message: `Not found: ${url.pathname}` })
 })
+
+setInterval(() => {
+  if (FORCE_MODE === 'empty' || FORCE_MODE === 'error') {
+    return
+  }
+  broadcastPatch(applyRandomNodePatch(orgTree))
+}, LIVE_UPDATE_INTERVAL_MS)
+
+setInterval(() => {
+  for (const client of sseClients) {
+    if (!writeSse(client, ': ping\n\n')) {
+      sseClients.delete(client)
+    }
+  }
+}, SSE_HEARTBEAT_MS)
 
 server.listen(PORT, () => {
   console.log(
     `[mock-server] listening on http://localhost:${PORT} (${orgTree.length} org nodes)`,
+  )
+  console.log(
+    `[mock-server] SSE stream at http://localhost:${PORT}/api/org-tree/stream`,
   )
   if (FORCE_MODE) {
     console.log(`[mock-server] MOCK_FORCE=${FORCE_MODE}`)

@@ -7,7 +7,16 @@ export const AppShell = styled.div`
 `
 
 export const Header = styled.header`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: ${({ theme }) => theme.space.md};
   margin-bottom: ${({ theme }) => theme.space.lg};
+`
+
+export const HeaderCopy = styled.div`
+  min-width: 0;
 `
 
 export const Title = styled.h1`

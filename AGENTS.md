@@ -17,8 +17,8 @@ There is no `CLAUDE.md`. Do not create one.
 
 ## Current stage
 
-**02 Core** is implemented (`step/1` and table/aggregation on top of it).
-Do not create `src/realtime` or `src/ai-search` unless the user names that
+**03 Polish** is implemented (`step/1`, `step/2`, and realtime/keyboard/animation
+on top of them). Do not create `src/ai-search` unless the user names that
 stage. Do not rebuild Stage 01/02 from scratch.
 
 ## What this project is
@@ -57,7 +57,7 @@ src/
   tree/           # tree view components and logic
   table/          # analytical table (stage 02)
   aggregation/    # pure rollups (stage 02)
-  realtime/       # planned — stage 03
+  realtime/       # SSE client, backoff, connection status (stage 03)
   ai-search/      # planned — stage 04
   shared/         # UI primitives, styled-components theme, named constants
 mock-server/      # standalone Node server, kept separate from src/
@@ -86,9 +86,11 @@ npm run dev:all       # Vite :5173 + mock API :4000
 - Artificial API delay: 400ms (`MOCK_API_DELAY_MS`).
 - Named constants live in `src/shared/constants.ts` (stale time 5s,
   performance thresholds high ≥ 70 / medium ≥ 40, name-filter debounce 250ms,
-  split-view min width 1280px).
-- Aggregation tests: `npm run test` (Vitest). Do not add realtime tests or
-  a broader harness until Stage 03 needs them.
+  split-view min width 1280px, cell flash 1.5s, tree expand 200ms, SSE
+  backoff 1s…30s).
+- Aggregation and ancestor-recompute tests: `npm run test` (Vitest). Realtime
+  patch/backoff helpers are covered there too. Do not add an AI-search
+  harness until Stage 04 needs it.
 
 ## Core architectural principle
 

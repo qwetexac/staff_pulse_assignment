@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { NAME_FILTER_DEBOUNCE_MS } from '@/shared/constants'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react'
+import { NAME_FILTER_DEBOUNCE_MS, SORT_CLICK_DELAY_MS } from '@/shared/constants'
 import { useDebouncedValue } from '@/shared/useDebouncedValue'
 import { getPerformanceLevel } from '@/tree/performance'
 import {
@@ -8,6 +14,8 @@ import {
   formatHeadcount,
 } from '@/table/format'
 import {
+  nextSortOnClick,
+  nextSortOnDoubleClick,
   TABLE_COLUMNS,
   type OrgTableRow,
   type SortColumn,
@@ -15,6 +23,13 @@ import {
 } from '@/table/tableModel'
 import { filterRowsByName, sortRows } from '@/table/tableQuery'
 import { scrollRowIntoTableView } from '@/table/scrollRowIntoView'
+import {
+  clampTableFocus,
+  moveTableFocus,
+  type TableFocus,
+} from '@/table/tableKeyboard'
+import { cellFlashKey } from '@/aggregation/recomputeAncestorRollups'
+import { type CellFlashMap } from '@/aggregation/useOrgTableRows'
 import {
   BodyRow,
   Caption,
@@ -36,6 +51,7 @@ import {
 
 type OrgTableProps = {
   rows: readonly OrgTableRow[]
+  flashes: CellFlashMap
   selectedId: string | null
   onSelect: (id: string) => void
 }
@@ -57,18 +73,30 @@ function ariaSort(
   return sort.direction === 'asc' ? 'ascending' : 'descending'
 }
 
-export function OrgTable({ rows, selectedId, onSelect }: OrgTableProps) {
+function focusCellSelector(rowIndex: number, columnIndex: number): string {
+  return `[data-focus-cell="${rowIndex}-${columnIndex}"]`
+}
+
+export function OrgTable({ rows, flashes, selectedId, onSelect }: OrgTableProps) {
   const [nameQuery, setNameQuery] = useState('')
   const [sort, setSort] = useState<SortState | null>(null)
+  const [rawFocus, setRawFocus] = useState<TableFocus | null>(null)
   const debouncedQuery = useDebouncedValue(nameQuery, NAME_FILTER_DEBOUNCE_MS)
   const bodyRef = useRef<HTMLTableSectionElement>(null)
   const headRef = useRef<HTMLTableSectionElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const shouldMoveDomFocusRef = useRef(false)
+  const sortClickTimerRef = useRef<number | null>(null)
 
   const visibleRows = useMemo(() => {
     const filtered = filterRowsByName(rows, debouncedQuery)
     return sortRows(filtered, sort)
   }, [rows, debouncedQuery, sort])
+
+  const focus =
+    rawFocus === null
+      ? null
+      : clampTableFocus(rawFocus, visibleRows.length, TABLE_COLUMNS.length)
 
   useEffect(() => {
     if (selectedId === null || !bodyRef.current || !scrollRef.current) {
@@ -85,25 +113,90 @@ export function OrgTable({ rows, selectedId, onSelect }: OrgTableProps) {
     scrollRowIntoTableView(scrollRef.current, selectedRow, headRef.current)
   }, [selectedId])
 
+  useEffect(() => {
+    if (!shouldMoveDomFocusRef.current || focus === null || !bodyRef.current) {
+      return
+    }
+    shouldMoveDomFocusRef.current = false
+
+    const cell = bodyRef.current.querySelector(
+      focusCellSelector(focus.rowIndex, focus.columnIndex),
+    )
+    if (cell instanceof HTMLElement) {
+      cell.focus()
+    }
+
+    const row = cell instanceof HTMLElement ? cell.closest('tr') : null
+    if (row instanceof HTMLElement && scrollRef.current) {
+      scrollRowIntoTableView(scrollRef.current, row, headRef.current)
+    }
+  }, [focus])
+
+  const clearSortClickTimer = () => {
+    if (sortClickTimerRef.current !== null) {
+      window.clearTimeout(sortClickTimerRef.current)
+      sortClickTimerRef.current = null
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      clearSortClickTimer()
+    }
+  }, [])
+
   const handleSortClick = (column: SortColumn) => {
-    setSort((current) => {
-      if (current?.column === column) {
-        return current
-      }
-      return { column, direction: 'asc' }
-    })
+    clearSortClickTimer()
+    sortClickTimerRef.current = window.setTimeout(() => {
+      sortClickTimerRef.current = null
+      setSort((current) => nextSortOnClick(current, column))
+    }, SORT_CLICK_DELAY_MS)
   }
 
   const handleSortDoubleClick = (column: SortColumn) => {
-    setSort((current) => {
-      if (current?.column !== column) {
-        return { column, direction: 'desc' }
+    clearSortClickTimer()
+    setSort((current) => nextSortOnDoubleClick(current, column))
+  }
+
+  const handleGridKeyDown = (event: KeyboardEvent<HTMLTableElement>) => {
+    if (visibleRows.length === 0) {
+      return
+    }
+
+    const origin =
+      focus ??
+      ({ rowIndex: 0, columnIndex: 0 } satisfies TableFocus)
+
+    if (event.key === 'Enter') {
+      const row = visibleRows[origin.rowIndex]
+      if (!row) {
+        return
       }
-      return {
-        column,
-        direction: current.direction === 'asc' ? 'desc' : 'asc',
-      }
-    })
+      event.preventDefault()
+      onSelect(row.id)
+      return
+    }
+
+    const next = moveTableFocus(
+      origin,
+      event.key,
+      visibleRows.length,
+      TABLE_COLUMNS.length,
+    )
+    if (next === null) {
+      return
+    }
+
+    event.preventDefault()
+    shouldMoveDomFocusRef.current = true
+    setRawFocus(next)
+  }
+
+  const isTabbableCell = (rowIndex: number, columnIndex: number) => {
+    if (focus === null) {
+      return rowIndex === 0 && columnIndex === 0
+    }
+    return focus.rowIndex === rowIndex && focus.columnIndex === columnIndex
   }
 
   return (
@@ -124,7 +217,7 @@ export function OrgTable({ rows, selectedId, onSelect }: OrgTableProps) {
       </TableToolbar>
 
       <TableScroll ref={scrollRef}>
-        <Table>
+        <Table role="grid" aria-rowcount={visibleRows.length} onKeyDown={handleGridKeyDown}>
           <Caption>Aggregated organization metrics</Caption>
           <TableHead ref={headRef}>
             <tr>
@@ -138,7 +231,7 @@ export function OrgTable({ rows, selectedId, onSelect }: OrgTableProps) {
                   <SortButton
                     type="button"
                     $numeric={column.numeric}
-                    title="Click to sort. Double-click to reverse order."
+                    title="Click to sort ascending. Double-click to reverse."
                     onClick={() => {
                       handleSortClick(column.column)
                     }}
@@ -156,7 +249,7 @@ export function OrgTable({ rows, selectedId, onSelect }: OrgTableProps) {
             </tr>
           </TableHead>
           <tbody ref={bodyRef}>
-            {visibleRows.map((row) => {
+            {visibleRows.map((row, rowIndex) => {
               const isSelected = row.id === selectedId
               const performanceLevel = getPerformanceLevel(
                 row.averagePerformance,
@@ -172,11 +265,80 @@ export function OrgTable({ rows, selectedId, onSelect }: OrgTableProps) {
                     onSelect(row.id)
                   }}
                 >
-                  <NameCell $depth={row.depth}>{row.name}</NameCell>
-                  <Cell>{row.levelLabel}</Cell>
-                  <Cell $numeric>{formatHeadcount(row.totalHeadcount)}</Cell>
-                  <Cell $numeric>{formatBudget(row.totalBudget)}</Cell>
-                  <PerformanceCell $numeric $tone={performanceLevel}>
+                  <NameCell
+                    $depth={row.depth}
+                    $keyboardFocused={
+                      focus?.rowIndex === rowIndex && focus.columnIndex === 0
+                    }
+                    tabIndex={isTabbableCell(rowIndex, 0) ? 0 : -1}
+                    data-focus-cell={`${rowIndex}-0`}
+                    role="gridcell"
+                    onFocus={() => {
+                      setRawFocus({ rowIndex, columnIndex: 0 })
+                    }}
+                  >
+                    {row.name}
+                  </NameCell>
+                  <Cell
+                    $keyboardFocused={
+                      focus?.rowIndex === rowIndex && focus.columnIndex === 1
+                    }
+                    tabIndex={isTabbableCell(rowIndex, 1) ? 0 : -1}
+                    data-focus-cell={`${rowIndex}-1`}
+                    role="gridcell"
+                    onFocus={() => {
+                      setRawFocus({ rowIndex, columnIndex: 1 })
+                    }}
+                  >
+                    {row.levelLabel}
+                  </Cell>
+                  <Cell
+                    key={`headcount-${flashes.get(cellFlashKey(row.id, 'headcount')) ?? 'idle'}`}
+                    $numeric
+                    $flashing={flashes.has(cellFlashKey(row.id, 'headcount'))}
+                    $keyboardFocused={
+                      focus?.rowIndex === rowIndex && focus.columnIndex === 2
+                    }
+                    tabIndex={isTabbableCell(rowIndex, 2) ? 0 : -1}
+                    data-focus-cell={`${rowIndex}-2`}
+                    role="gridcell"
+                    onFocus={() => {
+                      setRawFocus({ rowIndex, columnIndex: 2 })
+                    }}
+                  >
+                    {formatHeadcount(row.totalHeadcount)}
+                  </Cell>
+                  <Cell
+                    key={`budget-${flashes.get(cellFlashKey(row.id, 'budget')) ?? 'idle'}`}
+                    $numeric
+                    $flashing={flashes.has(cellFlashKey(row.id, 'budget'))}
+                    $keyboardFocused={
+                      focus?.rowIndex === rowIndex && focus.columnIndex === 3
+                    }
+                    tabIndex={isTabbableCell(rowIndex, 3) ? 0 : -1}
+                    data-focus-cell={`${rowIndex}-3`}
+                    role="gridcell"
+                    onFocus={() => {
+                      setRawFocus({ rowIndex, columnIndex: 3 })
+                    }}
+                  >
+                    {formatBudget(row.totalBudget)}
+                  </Cell>
+                  <PerformanceCell
+                    key={`performance-${flashes.get(cellFlashKey(row.id, 'performance')) ?? 'idle'}`}
+                    $numeric
+                    $tone={performanceLevel}
+                    $flashing={flashes.has(cellFlashKey(row.id, 'performance'))}
+                    $keyboardFocused={
+                      focus?.rowIndex === rowIndex && focus.columnIndex === 4
+                    }
+                    tabIndex={isTabbableCell(rowIndex, 4) ? 0 : -1}
+                    data-focus-cell={`${rowIndex}-4`}
+                    role="gridcell"
+                    onFocus={() => {
+                      setRawFocus({ rowIndex, columnIndex: 4 })
+                    }}
+                  >
                     {formatAveragePerformance(row.averagePerformance)}
                   </PerformanceCell>
                 </BodyRow>

@@ -1,9 +1,13 @@
 import type { ReactNode } from 'react'
 import { useOrgTree } from '@/api/useOrgTree'
 import { OrgDashboard } from '@/OrgDashboard'
+import { ConnectionStatus, useOrgTreeStream } from '@/realtime'
+import type { ConnectionStatus as ConnectionStatusValue } from '@/realtime/types'
+import { CACHE_STALE_TIME_MS } from '@/shared/constants'
 import {
   AppShell,
   Header,
+  HeaderCopy,
   Panel,
   StatusBody,
   StatusMessage,
@@ -41,25 +45,37 @@ function EmptyState() {
   )
 }
 
-function AppHeader() {
+function AppHeader({ status }: { status: ConnectionStatusValue }) {
   return (
     <Header>
-      <Title>Staff Pulse</Title>
-      <Subtitle>
-        Organization structure — divisions, departments, and teams
-      </Subtitle>
+      <HeaderCopy>
+        <Title>Staff Pulse</Title>
+        <Subtitle>
+          Organization structure — divisions, departments, and teams
+        </Subtitle>
+      </HeaderCopy>
+      <ConnectionStatus status={status} />
     </Header>
   )
 }
 
 export default function App() {
-  const { data, error, isLoading } = useOrgTree()
+  const live = useOrgTreeStream()
+  const staleTime =
+    live.status === 'connected'
+      ? Number.POSITIVE_INFINITY
+      : CACHE_STALE_TIME_MS
+  const { data, error, isLoading, revision } = useOrgTree({ staleTime })
 
   if (!isLoading && error === null && data !== undefined && data.length > 0) {
     return (
       <AppShell>
-        <AppHeader />
-        <OrgDashboard nodes={data} />
+        <AppHeader status={live.status} />
+        <OrgDashboard
+          nodes={data}
+          dataRevision={revision}
+          lastPatch={live.lastPatch}
+        />
       </AppShell>
     )
   }
@@ -76,7 +92,7 @@ export default function App() {
 
   return (
     <AppShell>
-      <AppHeader />
+      <AppHeader status={live.status} />
       <Panel>{content}</Panel>
     </AppShell>
   )
